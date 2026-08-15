@@ -1,0 +1,18 @@
+{
+  "name": "kapture-collections-mock-server",
+  "version": "1.0.0",
+  "description": "Mock webhook server implementing verify_customer, log_promise_to_pay, send_payment_link, escalate_to_agent, and mark_disposition tool calls for the Kapture Finance collections voicebot (Vapi).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

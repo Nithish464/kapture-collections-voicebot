@@ -1,0 +1,35 @@
+digraph StateMachine {
+    rankdir=TB;
+    bgcolor="white";
+    fontname="Helvetica";
+    node [fontname="Helvetica", fontsize=11, shape=box, style="filled,rounded", margin="0.2,0.12"];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    INIT [label="INIT\nGreeting / confirm\ntarget person", fillcolor="#E8EAF6", color="#3949AB"];
+    AUTH_PENDING [label="AUTH_PENDING\nAsk for PAN last-4 / DOB\nNO debt terms allowed", fillcolor="#FFF3E0", color="#EF6C00"];
+    WRONG_PERSON [label="WRONG_PERSON\n(terminal)", fillcolor="#ECEFF1", color="#455A64"];
+    AUTHENTICATED [label="AUTHENTICATED\nverify_customer(status=success)\nreturned by tool", fillcolor="#E3F2FD", color="#1565C0"];
+    NEGOTIATION [label="NEGOTIATION\nDebt disclosed, intent\ncaptured", fillcolor="#E8F5E9", color="#2E7D32"];
+    PTP_COLLECTED [label="PTP_COLLECTED\nlog_promise_to_pay +\nsend_payment_link", fillcolor="#C8E6C9", color="#2E7D32"];
+    ESCALATED [label="ESCALATED\nescalate_to_agent\n(hardship / dispute)", fillcolor="#FCE4EC", color="#AD1457"];
+    CALL_ENDED [label="CALL_ENDED\nmark_disposition\nlogged", shape=doublecircle, fillcolor="#CFD8DC", color="#37474F"];
+
+    INIT -> AUTH_PENDING [label="confirmed target"];
+    INIT -> WRONG_PERSON [label="not the person /\nunavailable"];
+    WRONG_PERSON -> CALL_ENDED;
+
+    AUTH_PENDING -> AUTHENTICATED [label="verify_customer\n= success", color="#1565C0", penwidth=2];
+    AUTH_PENDING -> AUTH_PENDING [label="verify_customer\n= fail (retry, max 2)"];
+    AUTH_PENDING -> CALL_ENDED [label="fail x3 / DNC /\nabusive"];
+
+    AUTHENTICATED -> NEGOTIATION [label="debt disclosed"];
+
+    NEGOTIATION -> PTP_COLLECTED [label="Will-Pay"];
+    NEGOTIATION -> ESCALATED [label="Hardship / Dispute"];
+    NEGOTIATION -> CALL_ENDED [label="Already-Paid /\nDNC / Wrong-Person"];
+
+    PTP_COLLECTED -> CALL_ENDED;
+    ESCALATED -> CALL_ENDED;
+
+    { rank=same; WRONG_PERSON; }
+}

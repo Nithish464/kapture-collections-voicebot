@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+mock-server/node_modules/
+
+# Environment variables (sensitive!)
+.env
+mock-server/.env
+
+# ngrok / tunnel binaries (large, platform-specific, don't belong in git)
+ngrok.exe
+ngrok.zip
+ngrok
+*.exe
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+*.swp
+
+# Build artifacts
+package-lock.json

@@ -1,0 +1,119 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "verify_customer",
+      "description": "Verifies customer identity against the account record using the last 4 digits of PAN or birth year. Must be called and must return verified:true before any debt/EMI/amount information is disclosed. On success, the response also includes product, overdue_amount, and dpd — this is the ONLY source of that information for the assistant; it is deliberately not present in the system prompt, so verification failing or not having happened yet means the data simply isn't in context to leak.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "description": "The customer's unique account ID, e.g. ACC-88392"
+          },
+          "verification_code": {
+            "type": "string",
+            "description": "The 4-digit PAN code or 4-digit birth year provided by the caller."
+          }
+        },
+        "required": ["account_id", "verification_code"]
+      }
+    },
+    "server": { "url": "https://YOUR_WEBHOOK_URL/webhook" }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "log_promise_to_pay",
+      "description": "Logs the promise-to-pay date and amount committed by the customer after verification and disclosure. The server independently validates and can reject this: it returns success:false with error:\"AMOUNT_EXCEEDS_OUTSTANDING\" if amount is above the outstanding balance, or error:\"PTP_DATE_NOT_FUTURE\" / \"PTP_DATE_INVALID\" if the date isn't a valid future date. On rejection, nothing is logged — ask the customer for a corrected value and call this tool again rather than treating it as recorded.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "account_id": { "type": "string" },
+          "ptp_date": {
+            "type": "string",
+            "description": "A concrete future date in ISO-8601 format (YYYY-MM-DD), e.g. 2026-08-14. Resolve relative phrases like \"Friday\" to an actual calendar date before calling this tool."
+          },
+          "amount": {
+            "type": "number",
+            "description": "The amount the customer agreed to pay. Must not exceed the account's outstanding balance — the server enforces this and will reject the call otherwise."
+          }
+        },
+        "required": ["account_id", "ptp_date", "amount"]
+      }
+    },
+    "server": { "url": "https://YOUR_WEBHOOK_URL/webhook" }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "send_payment_link",
+      "description": "Triggers a payment link to the customer's registered mobile number via SMS or WhatsApp.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "account_id": { "type": "string" },
+          "channel": {
+            "type": "string",
+            "enum": ["SMS", "WhatsApp", "BOTH"]
+          }
+        },
+        "required": ["account_id", "channel"]
+      }
+    },
+    "server": { "url": "https://YOUR_WEBHOOK_URL/webhook" }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "escalate_to_agent",
+      "description": "Hands the call/case off to a human agent for hardship, dispute, or any request beyond the bot's authority (e.g. a discount).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "account_id": { "type": "string" },
+          "reason": {
+            "type": "string",
+            "enum": ["HARDSHIP_REQUEST", "DISPUTE", "OTHER"]
+          },
+          "notes": {
+            "type": "string",
+            "description": "Short free-text summary of why this is being escalated."
+          }
+        },
+        "required": ["account_id", "reason"]
+      }
+    },
+    "server": { "url": "https://YOUR_WEBHOOK_URL/webhook" }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "mark_disposition",
+      "description": "Logs the final outcome of the call. Must be called exactly once per call, at the end, regardless of which path the conversation took.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "account_id": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PTP_AGREED",
+              "ALREADY_PAID",
+              "DISPUTED",
+              "HARDSHIP_ESCALATED",
+              "WRONG_PERSON",
+              "DO_NOT_CALL",
+              "CALLBACK_REQUESTED",
+              "HOSTILE_TERMINATED",
+              "NO_RESPONSE"
+            ]
+          },
+          "notes": { "type": "string" }
+        },
+        "required": ["account_id", "status"]
+      }
+    },
+    "server": { "url": "https://YOUR_WEBHOOK_URL/webhook" }
+  }
+]

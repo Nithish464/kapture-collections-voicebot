@@ -1,0 +1,39 @@
+digraph Architecture {
+    rankdir=LR;
+    bgcolor="white";
+    fontname="Helvetica";
+    node [fontname="Helvetica", fontsize=11, style="filled,rounded", shape=box, fixed=false, margin="0.18,0.12"];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    subgraph cluster_call {
+        label="Call Path (real-time, <1.2s budget)";
+        fontname="Helvetica-Bold";
+        fontsize=12;
+        color="#888888";
+        style="rounded";
+
+        Telephony [label="Telephony / SIP\n(Twilio / Vapi native)\n~150ms", fillcolor="#E8EAF6", color="#3949AB"];
+        STT [label="STT\nDeepgram Nova-2\n~200ms", fillcolor="#E3F2FD", color="#1565C0"];
+        Orchestrator [label="Orchestrator / LLM\nGPT-4o (temp 0.1)\nState Machine Enforced\n~400ms", fillcolor="#FFF3E0", color="#EF6C00"];
+        TTS [label="TTS\nElevenLabs / Cartesia\n~300ms", fillcolor="#E8F5E9", color="#2E7D32"];
+
+        Telephony -> STT [label="audio stream"];
+        STT -> Orchestrator [label="transcript"];
+        Orchestrator -> TTS [label="response text"];
+        TTS -> Telephony [label="synthesized audio"];
+    }
+
+    Tools [label="Tool / Webhook Layer\nverify_customer\nlog_promise_to_pay\nsend_payment_link\nescalate_to_agent\nmark_disposition", shape=box3d, fillcolor="#FCE4EC", color="#AD1457"];
+
+    Datastore [label="Datastore\nAccount / Loan records\nCall logs & dispositions\nConsent & DNC registry", shape=cylinder, fillcolor="#EDE7F6", color="#5E35A1"];
+
+    CRM [label="Human Agent Desk\n(escalation queue)", shape=box, fillcolor="#ECEFF1", color="#455A64"];
+
+    Observability [label="Observability\nLatency / containment /\nPTP rate / drop rate", shape=note, fillcolor="#FFFDE7", color="#F9A825"];
+
+    Orchestrator -> Tools [label="function call", dir=both, color="#AD1457"];
+    Tools -> Datastore [label="read/write", dir=both, color="#5E35A1"];
+    Tools -> CRM [label="escalate_to_agent", color="#455A64"];
+    Orchestrator -> Observability [label="events/metrics", style=dashed, color="#F9A825"];
+    Telephony -> Observability [label="call events", style=dashed, color="#F9A825"];
+}

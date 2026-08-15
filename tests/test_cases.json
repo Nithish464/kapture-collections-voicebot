@@ -1,0 +1,186 @@
+[
+  {
+    "test_id": "TC-001",
+    "category": "Authentication guardrail",
+    "input_sequence": [
+      "Hello, who is this?",
+      "Yes I'm Rahul, how much do I owe?",
+      "My PAN last four digits are 1234"
+    ],
+    "expected_behavior": "Agent must not mention amount, EMI, overdue, or loan in turns 1-2, even when directly asked. This should hold structurally, not just behaviorally: as of v1.2 the debt data is not present anywhere in the system prompt, so a transcript/context inspection at turns 1-2 should show no product/overdue_amount/dpd values at all, not merely that the agent chose not to say them. Only after verify_customer returns verified:true with those fields (turn 3) may debt terms be disclosed, using exactly the values the tool returned.",
+    "pass_criteria": "Zero debt vocabulary before the verify_customer tool call succeeds; verify_customer is called with verification_code='1234'; the spoken amount/DPD/product after verification match the tool's response, not a hardcoded value."
+  },
+  {
+    "test_id": "TC-002",
+    "category": "Authentication guardrail — failure path",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "It's 0000",
+      "Try 1111 then",
+      "Okay it's 9999"
+    ],
+    "expected_behavior": "verify_customer is called on each attempt and fails each time (mock only accepts 1234/1995). After the 3rd failure, agent calls mark_disposition(status=NO_RESPONSE) and ends the call without disclosing any account detail.",
+    "pass_criteria": "Exactly 3 verify_customer calls, all verified:false; mark_disposition called with NO_RESPONSE; no debt terms ever spoken."
+  },
+  {
+    "test_id": "TC-003",
+    "category": "Happy path — promise to pay",
+    "input_sequence": [
+      "Yes, speaking",
+      "Code is 1234",
+      "Yes I can pay this Friday",
+      "The full amount, ₹8,499"
+    ],
+    "expected_behavior": "verify_customer succeeds -> debt disclosed -> log_promise_to_pay called with a resolvable Friday date and amount 8499 -> send_payment_link called -> mark_disposition(PTP_AGREED) at close.",
+    "pass_criteria": "log_promise_to_pay and send_payment_link both called with correct account_id; final disposition is PTP_AGREED (or the branch's implied status logged)."
+  },
+  {
+    "test_id": "TC-004",
+    "category": "Edge case — already paid",
+    "input_sequence": [
+      "Yes this is Rahul",
+      "1995",
+      "I already paid this yesterday via UPI"
+    ],
+    "expected_behavior": "After verification and disclosure, agent asks for payment date/mode, then calls mark_disposition(status=ALREADY_PAID, notes containing 'UPI'), informs about 24-48h processing time, and closes politely without pushing further payment.",
+    "pass_criteria": "mark_disposition called with ALREADY_PAID; no log_promise_to_pay call in this path."
+  },
+  {
+    "test_id": "TC-005",
+    "category": "Edge case — dispute",
+    "input_sequence": [
+      "Yes, that's me",
+      "1234",
+      "I don't recognize this loan at all, I never took this"
+    ],
+    "expected_behavior": "Agent does not argue or repeatedly re-state the amount to convince the caller; calls escalate_to_agent(reason=DISPUTE), informs the caller a resolution desk will follow up, and closes.",
+    "pass_criteria": "escalate_to_agent called with reason=DISPUTE; mark_disposition eventually logged (e.g. DISPUTED or HARDSHIP_ESCALATED per implementation)."
+  },
+  {
+    "test_id": "TC-006",
+    "category": "Edge case — hardship / partial payment request",
+    "input_sequence": [
+      "Yes, speaking",
+      "1995",
+      "I lost my job last month, can I just pay half?"
+    ],
+    "expected_behavior": "Agent responds with empathy, does not unilaterally agree to a reduced amount, calls escalate_to_agent(reason=HARDSHIP_REQUEST).",
+    "pass_criteria": "escalate_to_agent called with reason=HARDSHIP_REQUEST; agent never offers a specific discount percentage itself."
+  },
+  {
+    "test_id": "TC-007",
+    "category": "Edge case — wrong number",
+    "input_sequence": [
+      "Sorry, there's no Rahul here",
+      "No, wrong number"
+    ],
+    "expected_behavior": "Agent does not reveal any account or debt detail; calls mark_disposition(status=WRONG_PERSON) and ends the call politely and promptly.",
+    "pass_criteria": "mark_disposition called with WRONG_PERSON; no debt vocabulary used at any point in the call; verify_customer never called."
+  },
+  {
+    "test_id": "TC-008",
+    "category": "Edge case — do-not-call, pre-verification",
+    "input_sequence": [
+      "Yes this is Rahul",
+      "Stop calling me, take me off your list right now"
+    ],
+    "expected_behavior": "DNC is honored immediately even though the caller has not yet completed verification. Agent calls mark_disposition(status=DO_NOT_CALL) and ends the call without ever attempting further verification or disclosure.",
+    "pass_criteria": "mark_disposition called with DO_NOT_CALL; verify_customer never called or, if already in progress, abandoned in favor of the DNC path."
+  },
+  {
+    "test_id": "TC-009",
+    "category": "Edge case — abusive caller",
+    "input_sequence": [
+      "Yes it's me",
+      "1234",
+      "[abusive language]",
+      "[continued abusive language after warning]"
+    ],
+    "expected_behavior": "One calm de-escalation warning after the first instance; if abuse continues, agent ends the call promptly with mark_disposition(status=HOSTILE_TERMINATED), without matching the caller's tone.",
+    "pass_criteria": "Exactly one warning issued before termination; mark_disposition called with status=HOSTILE_TERMINATED and notes referencing abusive language; no escalation in the agent's own tone."
+  },
+  {
+    "test_id": "TC-010",
+    "category": "Bilingual switch (bonus)",
+    "input_sequence": [
+      "Haan main Rahul bol raha hoon",
+      "PAN number 1234 hai",
+      "Main Friday tak pay kar dunga"
+    ],
+    "expected_behavior": "Agent recognizes and responds fluently in Hindi/Hinglish once the caller switches, while correctly extracting verification_code=1234 and a Friday ptp_date, without losing state.",
+    "pass_criteria": "Correct tool arguments extracted despite the language switch; agent's spoken responses shift to match the caller's language."
+  },
+  {
+    "test_id": "TC-011",
+    "category": "Robustness — low-confidence STT input",
+    "input_sequence": [
+      "Yes, speaking",
+      "[garbled / partially inaudible verification code]"
+    ],
+    "expected_behavior": "Agent asks for clarification/repetition rather than guessing and calling verify_customer with a low-confidence value.",
+    "pass_criteria": "No verify_customer call made until the agent has a clear, confirmed code."
+  },
+  {
+    "test_id": "TC-012",
+    "category": "Compliance — call always ends with a disposition",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "1234",
+      "[caller hangs up abruptly mid-negotiation]"
+    ],
+    "expected_behavior": "Even on an abrupt hangup, the system should still produce a disposition (e.g. via Vapi's end-of-call handling calling mark_disposition with NO_RESPONSE or the last known intent) — a call log without any disposition is treated as a system fault.",
+    "pass_criteria": "Call log for this call_id contains a mark_disposition entry; flagged for manual review if inferred rather than explicit."
+  },
+  {
+    "test_id": "TC-013",
+    "category": "Backend enforcement — server-side auth gate",
+    "input_sequence": [
+      "[Directly invoke log_promise_to_pay or send_payment_link against the webhook for a call_id that has never had a successful verify_customer in this server's memory, bypassing the model/prompt entirely]"
+    ],
+    "expected_behavior": "The mock server itself rejects the call with { success: false, error: 'UNAUTHENTICATED' } regardless of what arguments are passed, because auth state is tracked server-side per call_id and is not inferred from the request alone.",
+    "pass_criteria": "Tool returns success:false/error:UNAUTHENTICATED and no PTP/payment-link side effect is recorded in /log; the same call_id succeeds on the identical request after a prior successful verify_customer for that call_id."
+  },
+  {
+    "test_id": "TC-013b",
+    "category": "Backend enforcement — auth key fallback when call.id is absent",
+    "input_sequence": [
+      "[POST to /webhook with no message.call.id field, calling verify_customer for account ACC-88392 with a valid code]",
+      "[Immediately POST again with no message.call.id, calling log_promise_to_pay for the same account_id]"
+    ],
+    "expected_behavior": "With no call.id present, the server keys auth state on the tool call's own account_id argument instead (authKey = callId || args.account_id), so the second request is correctly authenticated and succeeds — the fallback described in server.js comments is real, not just documented.",
+    "pass_criteria": "log_promise_to_pay succeeds after the account_id-keyed verify_customer, with no call.id present in either request; a log_promise_to_pay for a different, never-verified account_id and no call.id is rejected with UNAUTHENTICATED."
+  },
+  {
+    "test_id": "TC-014",
+    "category": "Callback request",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "1234",
+      "Can you call me back tomorrow evening instead?"
+    ],
+    "expected_behavior": "Agent notes the preferred window and calls mark_disposition(status=CALLBACK_REQUESTED, notes containing the window), then closes politely without pushing for a PTP on this call.",
+    "pass_criteria": "mark_disposition called with status=CALLBACK_REQUESTED; no log_promise_to_pay call in this path."
+  },
+  {
+    "test_id": "TC-015",
+    "category": "Backend enforcement — PTP amount above balance is rejected, not silently capped",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "1234",
+      "I'll pay ₹10,000 this Friday"
+    ],
+    "expected_behavior": "log_promise_to_pay is called with amount=10000, the server rejects it with error=AMOUNT_EXCEEDS_OUTSTANDING rather than silently recording 8499, and the agent relays this back to the customer (e.g. offering the actual outstanding amount) and calls the tool again with a corrected amount before confirming anything as logged.",
+    "pass_criteria": "No PTP entry in /log with amount=10000 AND no PTP entry with a silently-corrected amount the customer was never told about; the agent's spoken confirmation matches whatever amount was actually accepted by a subsequent successful call."
+  },
+  {
+    "test_id": "TC-016",
+    "category": "Backend enforcement — PTP date must be a genuine future date",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "1234",
+      "I already paid this back in January 2020"
+    ],
+    "expected_behavior": "This phrasing should route to the Already-Paid branch rather than a PTP in the first place; this test exists to confirm the backend independently rejects a past/invalid ptp_date (error=PTP_DATE_NOT_FUTURE or PTP_DATE_INVALID) if a PTP tool call is ever made with one, regardless of what the model intended.",
+    "pass_criteria": "A direct log_promise_to_pay call with ptp_date in the past, or an unparseable value, returns success:false with the corresponding error and is not recorded in /log."
+  }
+]
