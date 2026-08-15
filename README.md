@@ -246,3 +246,11 @@ call:
    test call.
 2. Record the 2–4 minute demo (happy path + one edge case) and drop the link here
    before submitting.
+
+
+## 🔗 Live Links
+
+- **Deployed backend (Render):** https://kapture-collections-voicebot-3i4y.onrender.com
+- **GitHub repo:** https://github.com/Nithish464/kapture-collections-voicebot
+
+---
