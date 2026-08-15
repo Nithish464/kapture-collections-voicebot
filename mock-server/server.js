@@ -19,6 +19,9 @@
 const express = require("express");
 const app = express();
 app.use(express.json());
+app.get("/", (req, res) => {
+  res.status(200).send("Kapture Collections Voicebot — mock webhook server is running.");
+});
 
 // ---------------------------------------------------------------------------
 // In-memory "database" for this mock — one seeded account.
